@@ -101,7 +101,7 @@ export default function AppSidebar({ isRtl, setIsRtl }: AppSidebarProps) {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
-                    active={activePath === item.path}
+                    isActive={activePath === item.path}
                     onClick={() => handleNavigation(item.path)}
                   >
                     <item.icon className="h-5 w-5" />

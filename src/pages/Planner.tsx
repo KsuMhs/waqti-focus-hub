@@ -318,7 +318,7 @@ const Planner = () => {
                                 <h3 className="font-medium">{task.title}</h3>
                                 <span className="text-xs text-muted-foreground">{task.date}</span>
                               </div>
-                              <Badge className={categoryColors[task.category]} size="sm">
+                              <Badge className={categoryColors[task.category]}>
                                 {isRtl ? {
                                   "work": "العمل",
                                   "study": "الدراسة",
