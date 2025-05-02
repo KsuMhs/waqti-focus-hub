@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import MainLayout from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -5,6 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Trophy, Medal, Star, Award, Crown, Target, Flame } from "lucide-react";
 import { toast } from "sonner";
+
+// Define the base API URL depending on environment
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8080/api/index.php'
+  : '/api/index.php'; // Adjust this path for your production server
 
 type Achievement = {
   id: string;
@@ -38,14 +44,22 @@ const Achievements = () => {
     const fetchAchievements = async () => {
       try {
         setLoading(true);
-        // Replace with your actual API URL
-        const response = await fetch('http://localhost:8080/api/index.php?route=achievements');
+        console.log('Fetching achievements from:', `${API_URL}?route=achievements`);
+        
+        const response = await fetch(`${API_URL}?route=achievements`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
         
         if (!response.ok) {
-          throw new Error('Failed to fetch achievements');
+          throw new Error(`HTTP error! Status: ${response.status}`);
         }
         
         const data = await response.json();
+        console.log('Achievement data received:', data);
         
         if (data.status === 'success') {
           setAchievements(data.data);
@@ -165,7 +179,7 @@ const Achievements = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="border border-border/50">
             <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-waqti-purple mb-2">{totalPoints}</div>
+              <div className="text-4xl font-bold text-waqti-purple mb-2">{achievements.filter(a => a.unlocked).reduce((sum, a) => sum + a.points, 0)}</div>
               <p className="text-muted-foreground">{isRtl ? "إجمالي النقاط" : "Total Points"}</p>
             </CardContent>
           </Card>
@@ -173,7 +187,7 @@ const Achievements = () => {
           <Card className="border border-border/50">
             <CardContent className="pt-6 text-center">
               <div className="text-4xl font-bold text-waqti-green mb-2">
-                {unlockedAchievements}/{totalAchievements}
+                {achievements.filter(a => a.unlocked).length}/{achievements.length}
               </div>
               <p className="text-muted-foreground">{isRtl ? "الإنجازات المفتوحة" : "Achievements Unlocked"}</p>
             </CardContent>
@@ -182,7 +196,7 @@ const Achievements = () => {
           <Card className="border border-border/50">
             <CardContent className="pt-6 text-center">
               <div className="text-4xl font-bold text-waqti-blue mb-2">
-                {unlockedAchievements > 0 ? Math.round((unlockedAchievements / totalAchievements) * 100) : 0}%
+                {achievements.length > 0 ? Math.round((achievements.filter(a => a.unlocked).length / achievements.length) * 100) : 0}%
               </div>
               <p className="text-muted-foreground">{isRtl ? "التقدم الكلي" : "Overall Progress"}</p>
             </CardContent>
