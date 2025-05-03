@@ -43,20 +43,28 @@ const Registration = () => {
     
     try {
       console.log("بدء محاولة التسجيل...");
-      // تغيير البروتوكول إلى HTTPS للتأكد من الاتصال الآمن
-      const response = await fetch("https://waqti-focus-hub.kesug.com/register.php", {
+      
+      // استخدام محاولة CORS Proxy بدلاً من الاتصال المباشر
+      const apiUrl = "https://cors-anywhere.herokuapp.com/http://waqti-focus-hub.kesug.com/register.php";
+      
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json",
-          "X-Requested-With": "XMLHttpRequest" // إضافة هذا الرأس قد يساعد مع بعض إعدادات CORS
+          "Origin": window.location.origin
         },
-        mode: 'cors', // التأكد من استخدام وضع cors
-        credentials: 'omit', // تجنب إرسال ملفات تعريف الارتباط للتعامل مع بعض مشاكل CORS
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        // تعطيل credentials لمنع مشاكل CORS
+        credentials: 'omit'
       });
       
       console.log("تم استلام الرد:", response);
+      
+      if (!response.ok) {
+        throw new Error(`خطأ في الاستجابة: ${response.status} ${response.statusText}`);
+      }
+      
       const result = await response.json();
       
       setServerResponse({
@@ -80,26 +88,37 @@ const Registration = () => {
           description: result.message || "حدث خطأ أثناء التسجيل. يرجى المحاولة مرة أخرى.",
           variant: "destructive",
         });
+        
+        // تلقائيًا اقترح الوضع التجريبي
+        setTimeout(() => {
+          const demoButton = document.getElementById('demoModeButton');
+          if (demoButton) {
+            demoButton.focus();
+          }
+        }, 500);
       }
     } catch (error) {
       console.error("Registration error:", error);
       
       setServerResponse({
         success: false,
-        message: "لا يمكن الاتصال بالخادم. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى."
+        message: "لا يمكن الاتصال بالخادم. يرجى استخدام الوضع التجريبي للمتابعة."
       });
       
       toast({
         title: "خطأ في الاتصال",
-        description: "لا يمكن الاتصال بالخادم. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
+        description: "لا يمكن الاتصال بالخادم. يرجى استخدام الوضع التجريبي للمتابعة.",
         variant: "destructive",
       });
       
-      // عرض زر الوضع التجريبي تلقائيًا عند الفشل
+      // عرض زر الوضع التجريبي تلقائيًا عند الفشل وتسليط الضوء عليه
       setTimeout(() => {
         const demoButton = document.getElementById('demoModeButton');
         if (demoButton) {
           demoButton.focus();
+          // إضافة تأثير وميض للفت الانتباه
+          demoButton.classList.add('animate-pulse');
+          setTimeout(() => demoButton.classList.remove('animate-pulse'), 2000);
         }
       }, 500);
     } finally {
@@ -136,8 +155,8 @@ const Registration = () => {
       }));
       
       // الانتقال إلى صفحة المخطط بعد التسجيل التجريبي الناجح
-      setTimeout(() => navigate("/planner"), 2000);
-    }, 1500);
+      setTimeout(() => navigate("/planner"), 1500);
+    }, 1000);
   };
 
   return (
@@ -234,12 +253,18 @@ const Registration = () => {
                       id="demoModeButton"
                       type="button"
                       variant="outline"
-                      className="w-full"
+                      className="w-full bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200"
                       onClick={handleFallbackRegistration}
                       disabled={isLoading}
                     >
                       استخدم الوضع التجريبي
                     </Button>
+                  </div>
+                  
+                  <div className="text-center mt-2">
+                    <p className="text-sm text-red-600">
+                      * إذا واجهت مشاكل في الاتصال، الرجاء استخدام الوضع التجريبي للمتابعة
+                    </p>
                   </div>
                 </form>
               </Form>
