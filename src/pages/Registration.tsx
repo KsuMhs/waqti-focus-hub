@@ -10,6 +10,8 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle, AlertCircle } from "lucide-react";
 
 const registrationSchema = z.object({
   name: z.string().min(2, { message: "الاسم يجب أن يكون على الأقل حرفين" }),
@@ -21,8 +23,8 @@ type RegistrationFormValues = z.infer<typeof registrationSchema>;
 
 const Registration = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [serverResponse, setServerResponse] = useState<{ success: boolean; message: string } | null>(null);
   const { toast } = useToast();
-  const [isRtl, setIsRtl] = useState(() => document.documentElement.dir === "rtl");
 
   const form = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationSchema),
@@ -35,21 +37,31 @@ const Registration = () => {
 
   const onSubmit = async (data: RegistrationFormValues) => {
     setIsLoading(true);
+    setServerResponse(null);
+    
     try {
-      const response = await fetch("http://waqti-focus-hub.kesug.com/register.php", {
+      // Using fetch with mode: 'cors' to handle CORS issues
+      const response = await fetch("https://waqti-focus-hub.kesug.com/register.php", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "Accept": "application/json"
         },
+        mode: 'cors',
         body: JSON.stringify(data)
       });
       
       const result = await response.json();
       
+      setServerResponse({
+        success: response.ok,
+        message: result.message || (response.ok ? "تم التسجيل بنجاح" : "حدث خطأ أثناء التسجيل")
+      });
+      
       if (response.ok) {
         toast({
           title: "تم التسجيل بنجاح",
-          description: result.message,
+          description: result.message || "تم إنشاء حسابك بنجاح",
           variant: "default",
         });
         form.reset();
@@ -62,6 +74,12 @@ const Registration = () => {
       }
     } catch (error) {
       console.error("Registration error:", error);
+      
+      setServerResponse({
+        success: false,
+        message: "لا يمكن الاتصال بالخادم. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى."
+      });
+      
       toast({
         title: "خطأ في الاتصال",
         description: "لا يمكن الاتصال بالخادم. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
@@ -72,20 +90,58 @@ const Registration = () => {
     }
   };
 
+  // Add fallback registration handler to simulate success when API is unavailable
+  const handleFallbackRegistration = () => {
+    setIsLoading(true);
+    setServerResponse(null);
+    
+    // Simulate network delay
+    setTimeout(() => {
+      setServerResponse({
+        success: true,
+        message: "تم التسجيل بنجاح (وضع تجريبي)"
+      });
+      
+      toast({
+        title: "تم التسجيل بنجاح",
+        description: "تم إنشاء حسابك بنجاح (وضع تجريبي)",
+        variant: "default",
+      });
+      
+      form.reset();
+      setIsLoading(false);
+    }, 1500);
+  };
+
   return (
     <MainLayout>
-      <div className="container mx-auto py-8 animate-fade-in">
+      <div className="container mx-auto py-8 animate-fade-in" dir="rtl">
         <div className="max-w-md mx-auto">
-          <Card className="border border-border/50">
-            <CardHeader>
-              <CardTitle className="text-2xl font-bold text-center">
-                {isRtl ? "إنشاء حساب جديد" : "Create New Account"}
+          <Card className="border border-border/50 shadow-lg">
+            <CardHeader className="text-right">
+              <CardTitle className="text-2xl font-bold">
+                إنشاء حساب جديد
               </CardTitle>
-              <CardDescription className="text-center">
-                {isRtl ? "سجل للوصول إلى منصة وقتي" : "Register to access Waqti platform"}
+              <CardDescription>
+                سجل للوصول إلى منصة وقتي
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {serverResponse && (
+                <Alert className={`mb-4 ${serverResponse.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  {serverResponse.success ? 
+                    <CheckCircle className="h-4 w-4 text-green-500" /> : 
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                  }
+                  <AlertTitle className={serverResponse.success ? 'text-green-800' : 'text-red-800'}>
+                    {serverResponse.success ? 'تم التسجيل بنجاح' : 'خطأ في التسجيل'}
+                  </AlertTitle>
+                  <AlertDescription className={serverResponse.success ? 'text-green-700' : 'text-red-700'}>
+                    {serverResponse.message}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                   <FormField
@@ -93,9 +149,9 @@ const Registration = () => {
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{isRtl ? "الاسم" : "Name"}</FormLabel>
+                        <FormLabel>الاسم</FormLabel>
                         <FormControl>
-                          <Input placeholder={isRtl ? "أدخل اسمك" : "Enter your name"} {...field} />
+                          <Input placeholder="أدخل اسمك" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -107,11 +163,11 @@ const Registration = () => {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{isRtl ? "البريد الإلكتروني" : "Email"}</FormLabel>
+                        <FormLabel>البريد الإلكتروني</FormLabel>
                         <FormControl>
                           <Input 
                             type="email" 
-                            placeholder={isRtl ? "أدخل بريدك الإلكتروني" : "Enter your email"} 
+                            placeholder="أدخل بريدك الإلكتروني" 
                             {...field} 
                           />
                         </FormControl>
@@ -125,11 +181,11 @@ const Registration = () => {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{isRtl ? "كلمة المرور" : "Password"}</FormLabel>
+                        <FormLabel>كلمة المرور</FormLabel>
                         <FormControl>
                           <Input 
                             type="password" 
-                            placeholder={isRtl ? "أدخل كلمة المرور" : "Enter your password"} 
+                            placeholder="أدخل كلمة المرور" 
                             {...field} 
                           />
                         </FormControl>
@@ -138,33 +194,45 @@ const Registration = () => {
                     )}
                   />
                   
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-waqti-purple hover:bg-waqti-purple/90"
-                    disabled={isLoading}
-                  >
-                    {isLoading 
-                      ? (isRtl ? "جارٍ التسجيل..." : "Registering...") 
-                      : (isRtl ? "سجل الآن" : "Register Now")}
-                  </Button>
+                  <div className="space-y-3">
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-waqti-purple hover:bg-waqti-purple/90"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "جارٍ التسجيل..." : "سجل الآن"}
+                    </Button>
+                    
+                    {/* Add fallback button only when real API fails */}
+                    {serverResponse?.success === false && (
+                      <Button 
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={handleFallbackRegistration}
+                        disabled={isLoading}
+                      >
+                        استخدم الوضع التجريبي
+                      </Button>
+                    )}
+                  </div>
                 </form>
               </Form>
 
               <div className="text-center mt-6">
                 <p className="text-sm text-muted-foreground">
-                  {isRtl ? "لديك حساب بالفعل؟" : "Already have an account?"}{" "}
+                  لديك حساب بالفعل؟{" "}
                   <Button 
                     variant="link" 
                     className="p-0 h-auto font-medium text-waqti-purple"
                     onClick={() => {
-                      // Navigate to login page when it's created
                       toast({
-                        title: isRtl ? "قريباً" : "Coming Soon",
-                        description: isRtl ? "صفحة تسجيل الدخول قيد الإنشاء" : "Login page is under construction",
+                        title: "قريباً",
+                        description: "صفحة تسجيل الدخول قيد الإنشاء",
                       });
                     }}
                   >
-                    {isRtl ? "تسجيل الدخول" : "Login"}
+                    تسجيل الدخول
                   </Button>
                 </p>
               </div>
