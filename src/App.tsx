@@ -11,6 +11,7 @@ import FocusMode from "./pages/FocusMode";
 import Achievements from "./pages/Achievements";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import Registration from "./pages/Registration";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/focus" element={<FocusMode />} />
           <Route path="/achievements" element={<Achievements />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/registration" element={<Registration />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
