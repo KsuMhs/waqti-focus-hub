@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, AlertCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const registrationSchema = z.object({
   name: z.string().min(2, { message: "الاسم يجب أن يكون على الأقل حرفين" }),
@@ -25,6 +26,7 @@ const Registration = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [serverResponse, setServerResponse] = useState<{ success: boolean; message: string } | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const form = useForm<RegistrationFormValues>({
     resolver: zodResolver(registrationSchema),
@@ -40,17 +42,21 @@ const Registration = () => {
     setServerResponse(null);
     
     try {
-      // Using fetch with mode: 'cors' to handle CORS issues
+      console.log("بدء محاولة التسجيل...");
+      // تغيير البروتوكول إلى HTTPS للتأكد من الاتصال الآمن
       const response = await fetch("https://waqti-focus-hub.kesug.com/register.php", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          "Accept": "application/json",
+          "X-Requested-With": "XMLHttpRequest" // إضافة هذا الرأس قد يساعد مع بعض إعدادات CORS
         },
-        mode: 'cors',
+        mode: 'cors', // التأكد من استخدام وضع cors
+        credentials: 'omit', // تجنب إرسال ملفات تعريف الارتباط للتعامل مع بعض مشاكل CORS
         body: JSON.stringify(data)
       });
       
+      console.log("تم استلام الرد:", response);
       const result = await response.json();
       
       setServerResponse({
@@ -65,6 +71,9 @@ const Registration = () => {
           variant: "default",
         });
         form.reset();
+        
+        // انتقال إلى صفحة الخطة بعد التسجيل الناجح
+        setTimeout(() => navigate("/planner"), 2000);
       } else {
         toast({
           title: "خطأ في التسجيل",
@@ -85,31 +94,49 @@ const Registration = () => {
         description: "لا يمكن الاتصال بالخادم. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
         variant: "destructive",
       });
+      
+      // عرض زر الوضع التجريبي تلقائيًا عند الفشل
+      setTimeout(() => {
+        const demoButton = document.getElementById('demoModeButton');
+        if (demoButton) {
+          demoButton.focus();
+        }
+      }, 500);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Add fallback registration handler to simulate success when API is unavailable
+  // التسجيل في وضع تجريبي عندما يكون الخادم غير متاح
   const handleFallbackRegistration = () => {
     setIsLoading(true);
     setServerResponse(null);
     
-    // Simulate network delay
+    // محاكاة تأخير الشبكة
     setTimeout(() => {
       setServerResponse({
         success: true,
-        message: "تم التسجيل بنجاح (وضع تجريبي)"
+        message: "تم التسجيل بنجاح في الوضع التجريبي"
       });
       
       toast({
         title: "تم التسجيل بنجاح",
-        description: "تم إنشاء حسابك بنجاح (وضع تجريبي)",
+        description: "تم إنشاء حسابك بنجاح في الوضع التجريبي",
         variant: "default",
       });
       
       form.reset();
       setIsLoading(false);
+      
+      // حفظ بيانات المستخدم في التخزين المحلي للوضع التجريبي
+      localStorage.setItem("waqti_user", JSON.stringify({
+        name: form.getValues().name || "مستخدم تجريبي",
+        email: form.getValues().email || "user@example.com",
+        isDemo: true
+      }));
+      
+      // الانتقال إلى صفحة المخطط بعد التسجيل التجريبي الناجح
+      setTimeout(() => navigate("/planner"), 2000);
     }, 1500);
   };
 
@@ -203,18 +230,16 @@ const Registration = () => {
                       {isLoading ? "جارٍ التسجيل..." : "سجل الآن"}
                     </Button>
                     
-                    {/* Add fallback button only when real API fails */}
-                    {serverResponse?.success === false && (
-                      <Button 
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        onClick={handleFallbackRegistration}
-                        disabled={isLoading}
-                      >
-                        استخدم الوضع التجريبي
-                      </Button>
-                    )}
+                    <Button 
+                      id="demoModeButton"
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleFallbackRegistration}
+                      disabled={isLoading}
+                    >
+                      استخدم الوضع التجريبي
+                    </Button>
                   </div>
                 </form>
               </Form>
