@@ -1,5 +1,6 @@
+
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import MainLayout from "@/components/Layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, AlertCircle } from "lucide-react";
+import { CheckCircle, AlertCircle, Wifi, WifiOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,6 +26,7 @@ type RegistrationFormValues = z.infer<typeof registrationSchema>;
 const Registration = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [serverResponse, setServerResponse] = useState<{ success: boolean; message: string } | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -37,12 +39,52 @@ const Registration = () => {
     }
   });
 
+  // مراقبة حالة الاتصال بالانترنت
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // التحقق من اتصال Supabase عند تحميل الصفحة
+  useEffect(() => {
+    const checkSupabaseConnection = async () => {
+      try {
+        // محاولة عمل استعلام بسيط للتأكد من الاتصال
+        const { error } = await supabase.from('profiles').select('id').limit(1);
+        if (error) {
+          console.warn("تعذر الاتصال بـ Supabase:", error);
+          setIsOnline(false);
+        }
+      } catch (error) {
+        console.warn("خطأ في الاتصال بـ Supabase:", error);
+        setIsOnline(false);
+      }
+    };
+
+    if (navigator.onLine) {
+      checkSupabaseConnection();
+    }
+  }, []);
+
   const onSubmit = async (data: RegistrationFormValues) => {
     setIsLoading(true);
     setServerResponse(null);
     
     try {
-      console.log("بدء محاولة التسجيل باستخدام سوبابيس...");
+      console.log("بدء محاولة التسجيل...");
+      
+      // إذا كان الاتصال غير متاح، استخدم الوضع التجريبي تلقائيا
+      if (!isOnline) {
+        return handleFallbackRegistration(data);
+      }
       
       // تسجيل المستخدم في سوبابيس
       const { data: authData, error } = await supabase.auth.signUp({
@@ -51,7 +93,8 @@ const Registration = () => {
         options: {
           data: {
             name: data.name,
-          }
+          },
+          emailRedirectTo: window.location.origin + '/planner'
         }
       });
       
@@ -61,8 +104,7 @@ const Registration = () => {
       
       console.log("تم التسجيل بنجاح:", authData);
       
-      // The profile creation is now handled by the database trigger
-      // No need to manually insert into profiles table
+      // تم إنشاء الملف الشخصي تلقائيًا بواسطة الـ trigger في قاعدة البيانات
       
       setServerResponse({
         success: true,
@@ -98,6 +140,10 @@ const Registration = () => {
           errorMessage = "البريد الإلكتروني مسجل مسبقاً";
         } else if (error.message.includes("password")) {
           errorMessage = "كلمة المرور غير صالحة";
+        } else if (error.message.includes("Network") || error.message.includes("fetch")) {
+          errorMessage = "تعذر الاتصال بالخادم. يرجى التحقق من اتصالك بالإنترنت";
+          // تلقائيا استخدم الوضع التجريبي عند وجود مشاكل بالشبكة
+          return handleFallbackRegistration(data);
         }
       }
       
@@ -128,7 +174,7 @@ const Registration = () => {
   };
 
   // التسجيل في وضع تجريبي عندما يكون الخادم غير متاح
-  const handleFallbackRegistration = () => {
+  const handleFallbackRegistration = (data: RegistrationFormValues) => {
     setIsLoading(true);
     setServerResponse(null);
     
@@ -146,17 +192,17 @@ const Registration = () => {
       });
       
       form.reset();
-      setIsLoading(false);
       
       // حفظ بيانات المستخدم في التخزين المحلي للوضع التجريبي
       localStorage.setItem("waqti_user", JSON.stringify({
-        name: form.getValues().name || "مستخدم تجريبي",
-        email: form.getValues().email || "user@example.com",
+        name: data.name || "مستخدم تجريبي",
+        email: data.email || "user@example.com",
         isDemo: true
       }));
       
       // الانتقال إلى صفحة المخطط بعد التسجيل التجريبي الناجح
       setTimeout(() => navigate("/planner"), 1500);
+      setIsLoading(false);
     }, 1000);
   };
 
@@ -166,8 +212,19 @@ const Registration = () => {
         <div className="max-w-md mx-auto">
           <Card className="border border-border/50 shadow-lg">
             <CardHeader className="text-right">
-              <CardTitle className="text-2xl font-bold">
-                إنشاء حساب جديد
+              <CardTitle className="text-2xl font-bold flex items-center justify-between">
+                <span>إنشاء حساب جديد</span>
+                <span className="text-sm font-normal">
+                  {isOnline ? (
+                    <span className="text-green-600 flex items-center">
+                      <Wifi className="h-4 w-4 mr-1" /> متصل
+                    </span>
+                  ) : (
+                    <span className="text-amber-600 flex items-center">
+                      <WifiOff className="h-4 w-4 mr-1" /> غير متصل
+                    </span>
+                  )}
+                </span>
               </CardTitle>
               <CardDescription>
                 سجل للوصول إلى منصة وقتي
@@ -255,18 +312,20 @@ const Registration = () => {
                       type="button"
                       variant="outline"
                       className="w-full bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200"
-                      onClick={handleFallbackRegistration}
+                      onClick={() => handleFallbackRegistration(form.getValues())}
                       disabled={isLoading}
                     >
                       استخدم الوضع التجريبي
                     </Button>
                   </div>
                   
-                  <div className="text-center mt-2">
-                    <p className="text-sm text-red-600">
-                      * إذا واجهت مشاكل في الاتصال، الرجاء استخدام الوضع التجريبي للمتابعة
-                    </p>
-                  </div>
+                  {!isOnline && (
+                    <div className="text-center mt-2">
+                      <p className="text-sm text-red-600">
+                        * أنت حاليا غير متصل بالإنترنت. يمكنك استخدام الوضع التجريبي للمتابعة
+                      </p>
+                    </div>
+                  )}
                 </form>
               </Form>
 
