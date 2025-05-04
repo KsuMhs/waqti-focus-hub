@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useState } from "react";
 import MainLayout from "@/components/Layout/MainLayout";
@@ -62,21 +61,8 @@ const Registration = () => {
       
       console.log("تم التسجيل بنجاح:", authData);
       
-      // إنشاء سجل للمستخدم في قاعدة البيانات
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          { 
-            id: authData.user?.id,
-            name: data.name,
-            email: data.email
-          }
-        ]);
-      
-      if (profileError) {
-        console.error("خطأ في إنشاء الملف الشخصي:", profileError);
-        // استمر رغم ذلك لأن المستخدم تم إنشاؤه بنجاح
-      }
+      // The profile creation is now handled by the database trigger
+      // No need to manually insert into profiles table
       
       setServerResponse({
         success: true,
