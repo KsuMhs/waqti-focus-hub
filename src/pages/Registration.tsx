@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, AlertCircle, Wifi, WifiOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, checkSupabaseConnection } from "@/integrations/supabase/client";
 
 const registrationSchema = z.object({
   name: z.string().min(2, { message: "الاسم يجب أن يكون على الأقل حرفين" }),
@@ -27,6 +27,7 @@ const Registration = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [serverResponse, setServerResponse] = useState<{ success: boolean; message: string } | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -39,39 +40,45 @@ const Registration = () => {
     }
   });
 
-  // مراقبة حالة الاتصال بالانترنت
+  // مراقبة حالة الاتصال بالانترنت وبـ Supabase
   useEffect(() => {
+    // تسجيل حالة الاتصال الأولية
+    setIsOnline(navigator.onLine);
+    
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
+    // إضافة مستمعي الأحداث للاتصال بالإنترنت
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // التحقق من الاتصال بـ Supabase إذا كان هناك اتصال بالإنترنت
+    const checkConnection = async () => {
+      if (navigator.onLine) {
+        try {
+          console.log("جاري التحقق من الاتصال بـ Supabase...");
+          const isConnected = await checkSupabaseConnection();
+          console.log("حالة الاتصال بـ Supabase:", isConnected);
+          setIsSupabaseConnected(isConnected);
+          setIsOnline(isConnected); // تعيين حالة الاتصال بناءً على اتصال Supabase الفعلي
+        } catch (error) {
+          console.error("فشل التحقق من اتصال Supabase:", error);
+          setIsSupabaseConnected(false);
+        }
+      } else {
+        setIsSupabaseConnected(false);
+      }
+    };
+
+    // التحقق من الاتصال عند تحميل الصفحة وإعادة التحقق كل 30 ثانية
+    checkConnection();
+    const connectionInterval = setInterval(checkConnection, 30000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(connectionInterval);
     };
-  }, []);
-
-  // التحقق من اتصال Supabase عند تحميل الصفحة
-  useEffect(() => {
-    const checkSupabaseConnection = async () => {
-      try {
-        // محاولة عمل استعلام بسيط للتأكد من الاتصال
-        const { error } = await supabase.from('profiles').select('id').limit(1);
-        if (error) {
-          console.warn("تعذر الاتصال بـ Supabase:", error);
-          setIsOnline(false);
-        }
-      } catch (error) {
-        console.warn("خطأ في الاتصال بـ Supabase:", error);
-        setIsOnline(false);
-      }
-    };
-
-    if (navigator.onLine) {
-      checkSupabaseConnection();
-    }
   }, []);
 
   const onSubmit = async (data: RegistrationFormValues) => {
@@ -82,7 +89,14 @@ const Registration = () => {
       console.log("بدء محاولة التسجيل...");
       
       // إذا كان الاتصال غير متاح، استخدم الوضع التجريبي تلقائيا
-      if (!isOnline) {
+      if (!isOnline || !isSupabaseConnected) {
+        return handleFallbackRegistration(data);
+      }
+      
+      // إعادة التحقق من الاتصال قبل إرسال البيانات
+      const connectionCheck = await checkSupabaseConnection();
+      if (!connectionCheck) {
+        console.log("لا يوجد اتصال بـ Supabase، جاري التحويل إلى الوضع التجريبي");
         return handleFallbackRegistration(data);
       }
       
@@ -104,7 +118,7 @@ const Registration = () => {
       
       console.log("تم التسجيل بنجاح:", authData);
       
-      // تم إنشاء الملف الشخصي تلقائيًا بواسطة الـ trigger في قاعدة البيانات
+      // Profile سيتم إنشاؤه تلقائيًا بواسطة الـ trigger في قاعدة البيانات
       
       setServerResponse({
         success: true,
@@ -157,17 +171,6 @@ const Registration = () => {
         description: errorMessage,
         variant: "destructive",
       });
-      
-      // عرض زر الوضع التجريبي تلقائيًا عند الفشل وتسليط الضوء عليه
-      setTimeout(() => {
-        const demoButton = document.getElementById('demoModeButton');
-        if (demoButton) {
-          demoButton.focus();
-          // إضافة تأثير وميض للفت الانتباه
-          demoButton.classList.add('animate-pulse');
-          setTimeout(() => demoButton.classList.remove('animate-pulse'), 2000);
-        }
-      }, 500);
     } finally {
       setIsLoading(false);
     }
@@ -206,6 +209,16 @@ const Registration = () => {
     }, 1000);
   };
 
+  // تحديد الرسالة المناسبة لحالة الاتصال
+  const connectionStatusMessage = () => {
+    if (!isOnline) {
+      return "أنت غير متصل بالإنترنت. يمكنك استخدام الوضع التجريبي للمتابعة";
+    } else if (!isSupabaseConnected) {
+      return "لا يمكن الاتصال بالخادم حاليًا. يمكنك استخدام الوضع التجريبي للمتابعة";
+    }
+    return null;
+  };
+
   return (
     <MainLayout>
       <div className="container mx-auto py-8 animate-fade-in" dir="rtl">
@@ -215,7 +228,7 @@ const Registration = () => {
               <CardTitle className="text-2xl font-bold flex items-center justify-between">
                 <span>إنشاء حساب جديد</span>
                 <span className="text-sm font-normal">
-                  {isOnline ? (
+                  {isOnline && isSupabaseConnected ? (
                     <span className="text-green-600 flex items-center">
                       <Wifi className="h-4 w-4 mr-1" /> متصل
                     </span>
@@ -319,10 +332,10 @@ const Registration = () => {
                     </Button>
                   </div>
                   
-                  {!isOnline && (
+                  {connectionStatusMessage() && (
                     <div className="text-center mt-2">
                       <p className="text-sm text-red-600">
-                        * أنت حاليا غير متصل بالإنترنت. يمكنك استخدام الوضع التجريبي للمتابعة
+                        * {connectionStatusMessage()}
                       </p>
                     </div>
                   )}

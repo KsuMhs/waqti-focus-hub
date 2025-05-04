@@ -1,5 +1,5 @@
 
 // This file is deprecated. Please use @/integrations/supabase/client.ts instead.
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, checkSupabaseConnection } from "@/integrations/supabase/client";
 
-export { supabase };
+export { supabase, checkSupabaseConnection };
