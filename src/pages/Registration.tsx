@@ -13,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 
 const registrationSchema = z.object({
   name: z.string().min(2, { message: "الاسم يجب أن يكون على الأقل حرفين" }),
@@ -42,72 +43,86 @@ const Registration = () => {
     setServerResponse(null);
     
     try {
-      console.log("بدء محاولة التسجيل...");
+      console.log("بدء محاولة التسجيل باستخدام سوبابيس...");
       
-      // استخدام محاولة CORS Proxy بدلاً من الاتصال المباشر
-      const apiUrl = "https://cors-anywhere.herokuapp.com/http://waqti-focus-hub.kesug.com/register.php";
-      
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Origin": window.location.origin
-        },
-        body: JSON.stringify(data),
-        // تعطيل credentials لمنع مشاكل CORS
-        credentials: 'omit'
-      });
-      
-      console.log("تم استلام الرد:", response);
-      
-      if (!response.ok) {
-        throw new Error(`خطأ في الاستجابة: ${response.status} ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      
-      setServerResponse({
-        success: response.ok,
-        message: result.message || (response.ok ? "تم التسجيل بنجاح" : "حدث خطأ أثناء التسجيل")
-      });
-      
-      if (response.ok) {
-        toast({
-          title: "تم التسجيل بنجاح",
-          description: result.message || "تم إنشاء حسابك بنجاح",
-          variant: "default",
-        });
-        form.reset();
-        
-        // انتقال إلى صفحة الخطة بعد التسجيل الناجح
-        setTimeout(() => navigate("/planner"), 2000);
-      } else {
-        toast({
-          title: "خطأ في التسجيل",
-          description: result.message || "حدث خطأ أثناء التسجيل. يرجى المحاولة مرة أخرى.",
-          variant: "destructive",
-        });
-        
-        // تلقائيًا اقترح الوضع التجريبي
-        setTimeout(() => {
-          const demoButton = document.getElementById('demoModeButton');
-          if (demoButton) {
-            demoButton.focus();
+      // تسجيل المستخدم في سوبابيس
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            name: data.name,
           }
-        }, 500);
+        }
+      });
+      
+      if (error) {
+        throw error;
       }
-    } catch (error) {
-      console.error("Registration error:", error);
+      
+      console.log("تم التسجيل بنجاح:", authData);
+      
+      // إنشاء سجل للمستخدم في قاعدة البيانات
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          { 
+            id: authData.user?.id,
+            name: data.name,
+            email: data.email
+          }
+        ]);
+      
+      if (profileError) {
+        console.error("خطأ في إنشاء الملف الشخصي:", profileError);
+        // استمر رغم ذلك لأن المستخدم تم إنشاؤه بنجاح
+      }
       
       setServerResponse({
-        success: false,
-        message: "لا يمكن الاتصال بالخادم. يرجى استخدام الوضع التجريبي للمتابعة."
+        success: true,
+        message: "تم التسجيل بنجاح، تم إرسال بريد التحقق إلى بريدك الإلكتروني"
       });
       
       toast({
-        title: "خطأ في الاتصال",
-        description: "لا يمكن الاتصال بالخادم. يرجى استخدام الوضع التجريبي للمتابعة.",
+        title: "تم التسجيل بنجاح",
+        description: "تم إنشاء حسابك بنجاح، تم إرسال بريد التحقق",
+        variant: "default",
+      });
+      
+      form.reset();
+      
+      // حفظ معلومات المستخدم محليًا
+      localStorage.setItem("waqti_user", JSON.stringify({
+        name: data.name,
+        email: data.email,
+        id: authData.user?.id
+      }));
+      
+      // انتقال إلى صفحة الخطة بعد التسجيل الناجح
+      setTimeout(() => navigate("/planner"), 2000);
+      
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      
+      let errorMessage = "حدث خطأ أثناء التسجيل";
+      
+      // تحديد نوع الخطأ من سوبابيس
+      if (error.message) {
+        if (error.message.includes("email") || error.message.includes("already registered")) {
+          errorMessage = "البريد الإلكتروني مسجل مسبقاً";
+        } else if (error.message.includes("password")) {
+          errorMessage = "كلمة المرور غير صالحة";
+        }
+      }
+      
+      setServerResponse({
+        success: false,
+        message: errorMessage
+      });
+      
+      toast({
+        title: "خطأ في التسجيل",
+        description: errorMessage,
         variant: "destructive",
       });
       
